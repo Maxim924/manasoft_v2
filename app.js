@@ -33,6 +33,22 @@ if ('IntersectionObserver' in window) {
       if (entry.isIntersecting) { entry.target.classList.add('visible'); reveals.unobserve(entry.target); }
     }), { threshold: 0.08 });
     $$('.reveal').forEach(el => reveals.observe(el));
+
+    const process = $('#approach .process-grid');
+    if (process) {
+      const steps = $$(':scope > article', process);
+      const inViewThreshold = .15;
+      const processReveal = new IntersectionObserver(entries => {
+        const entering = new Set(entries.filter(entry => entry.intersectionRatio >= inViewThreshold).map(entry => entry.target));
+        steps.filter(step => entering.has(step)).forEach((step, index) => {
+          step.style.setProperty('--process-delay', `${index * 180}ms`);
+          step.classList.add('step-in-view');
+          processReveal.unobserve(step);
+        });
+      }, { threshold: inViewThreshold });
+      process.classList.add('process-reveal');
+      steps.forEach(step => processReveal.observe(step));
+    }
   }
   const sectionLinks = $$('.nav-link[href^="#"]', sidebar);
   if (sectionLinks.length > 1) {
@@ -57,15 +73,20 @@ if (integrationCards.length && Element.prototype.animate) {
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
   const bounceDuration = 260;
   let bounceWave;
-  integrationCards[0].addEventListener('pointerenter', event => {
+  async function startBounceWave(event) {
     if (event.pointerType !== 'mouse' || reduceMotion.matches || bounceWave) return;
+    integrationCards.forEach(card => card.classList.remove('integration-lit'));
     bounceWave = integrationCards.map((card, index) => card.animate([
       { transform: 'translateY(0)', easing: 'ease-out' },
       { transform: 'translateY(-8px)', offset: .45, easing: 'ease-in' },
       { transform: 'translateY(0)' }
     ], { duration: bounceDuration, delay: index * bounceDuration }));
-    Promise.allSettled(bounceWave.map(animation => animation.finished)).then(() => { bounceWave = undefined; });
-  });
+    await Promise.allSettled(bounceWave.map((jump, index) => jump.finished.then(() => {
+      if (!reduceMotion.matches) integrationCards[index].classList.add('integration-lit');
+    })));
+    bounceWave = undefined;
+  }
+  integrationCards.forEach(card => card.addEventListener('pointerenter', startBounceWave));
   reduceMotion.addEventListener('change', () => {
     if (reduceMotion.matches) bounceWave?.forEach(animation => animation.cancel());
   });
